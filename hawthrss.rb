@@ -38,28 +38,27 @@ class BaseConsumer
     end
   end
 
-  def item_matches_filter(item, filter)
-    case filter
-    when String
-      item.title.downcase.include?(filter.downcase)
-    when Regex
-      filter === item.title
-    else
-      raise "unsupported filter: #{filter.inspect}"
+  def item_matches_filters(item, filters)
+    Array(filters).any? do |filter|
+      case filter
+      when String
+        item.title.downcase.include?(filter.downcase)
+      when Regex
+        filter === item.title
+      else
+        raise "unsupported filter: #{filter.inspect}"
+      end
     end
   end
 
   def do_filter
-    Array(@options[:only]).each do |filter|
-      items.select! do |item|
-        item_matches_filter(item, filter)
-      end
-    end
-    Array(@options[:except]).each do |filter|
-      items.reject! do |item|
-        item_matches_filter(item, filter)
-      end
-    end
+    items.select! do |item|
+      item_matches_filters(item, @options[:only])
+    end if @options[:only]
+
+    items.reject! do |item|
+      item_matches_filters(item, @options[:except])
+    end if @options[:except]
   end
 
   def do_transform
@@ -158,6 +157,7 @@ feeds = [
   YoutubeConsumer.new(user: 'voxdotcom'),
   YoutubeConsumer.new(user: 'day9tv', only: 'Starcraft'),
   YoutubeConsumer.new(user: 'Matthiaswandel'),
+  YoutubeConsumer.new(user: 'testedcom', only: ['Adam Savage', 'Simone'], except: 'Still Untitled'),
   XkcdConsumer.new,
   SmbcConsumer.new,
 ]
