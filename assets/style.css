@@ -1,0 +1,30 @@
+html{
+	font-family: serif;
+	font-size: 1.125em;
+	line-height: 1.6;
+	color: #333;
+}
+
+a {
+	text-decoration: none;
+}
+
+body{
+	max-width: 800px;
+	padding: 1em;
+	margin: auto;
+	overflow-x: hidden;
+}
+
+h1 {
+	font-size: 2em;
+	margin: 0.67em 0;
+}
+
+img {
+	max-width: 100%;
+}
+
+video {
+	width: 100%;
+}
