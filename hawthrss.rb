@@ -4,14 +4,15 @@ require 'feedjira'
 require 'pry'
 
 class Item
-  attr_accessor :id, :title, :url, :updated_at, :content, :feed, :media_url
-  def initialize(id:, title:, url:, updated_at:, content:, feed:, media_url: nil)
+  attr_accessor :id, :title, :url, :updated_at, :content, :feed, :media_url, :thumbnail_url
+  def initialize(id:, title:, url:, updated_at:, content:, feed:, media_url: nil, thumbnail_url: nil)
     @title = title
     @url = url
     @updated_at = updated_at
     @content = content
     @feed = feed
     @media_url = media_url
+    @thumbnail_url = thumbnail_url
   end
 end
 
@@ -97,7 +98,8 @@ class AtomConsumer < HttpConsumer
         url: item.url,
         updated_at: item.published || item.updated,
         content: item.content || item.summary,
-        media_url: item.media_url,
+        media_url: (item.media_url rescue nil),
+        thumbnail_url: (item.media_thumbnail_url rescue nil),
         feed: self
       )
     end
@@ -140,10 +142,9 @@ class YoutubeConsumer < AtomConsumer
   def do_transform
     items.each do |item|
       item.content = <<~HTML
-        <iframe id="ytplayer" type="text/html" width="800" height="480"
-         src="#{item.media_url.gsub('/v/', '/embed/')}"
-         frameborder="0"></iframe>
-        (<a href="http://#{item.url}">direct link</a>)
+        <a href="#{item.url}" target="_blank">
+          <img src="#{item.thumbnail_url}" width="480" height="360" />
+        </a>
       HTML
     end
   end
@@ -153,8 +154,10 @@ feeds = [
   YoutubeConsumer.new(channel_id: 'UCPD_bxCRGpmmeQcbe2kpPaA', only: 'Hot Ones'),
   YoutubeConsumer.new(user: 'bgfilms', except: 'Basics with Babish'),
   YoutubeConsumer.new(channel_id: 'UCfMJ2MchTSW2kWaT0kK94Yw'),
+  YoutubeConsumer.new(channel_id: 'UCbpMy0Fg74eXXkvxJrtEn3w', only: "It's Alive"),
   YoutubeConsumer.new(user: 'voxdotcom'),
   YoutubeConsumer.new(user: 'day9tv', only: 'Starcraft'),
+  YoutubeConsumer.new(user: 'Matthiaswandel'),
   XkcdConsumer.new,
   SmbcConsumer.new,
 ]
