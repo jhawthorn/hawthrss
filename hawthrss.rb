@@ -4,13 +4,14 @@ require 'feedjira'
 require 'pry'
 
 class Item
-  attr_accessor :id, :title, :url, :updated_at, :content, :feed
-  def initialize(id:, title:, url:, updated_at:, content:, feed:)
+  attr_accessor :id, :title, :url, :updated_at, :content, :feed, :media_url
+  def initialize(id:, title:, url:, updated_at:, content:, feed:, media_url: nil)
     @title = title
     @url = url
     @updated_at = updated_at
     @content = content
     @feed = feed
+    @media_url = media_url
   end
 end
 
@@ -18,6 +19,7 @@ class BaseConsumer
   attr_reader :title, :items
 
   def initialize(options)
+    @options = options
     @fetched = false
     @title = nil
     @items = nil
@@ -28,13 +30,47 @@ class BaseConsumer
   end
 
   def fetch
-    do_fetch unless fetched?
+    unless fetched?
+      do_fetch
+      do_filter
+      do_transform
+    end
+  end
+
+  def item_matches_filter(item, filter)
+    case filter
+    when String
+      item.title.downcase.include?(filter.downcase)
+    when Regex
+      filter === item.title
+    else
+      raise "unsupported filter: #{filter.inspect}"
+    end
+  end
+
+  def do_filter
+    Array(@options[:only]).each do |filter|
+      items.select! do |item|
+        item_matches_filter(item, filter)
+      end
+    end
+    Array(@options[:except]).each do |filter|
+      items.reject! do |item|
+        item_matches_filter(item, filter)
+      end
+    end
+  end
+
+  def do_transform
   end
 end
 
 class HttpConsumer < BaseConsumer
+  attr_reader :id
+
   def initialize(options)
     @url = options.delete(:url) || raise("option :url required")
+    @id = "#{self.class}:#{@url}"
     super(options)
   end
 
@@ -61,6 +97,7 @@ class AtomConsumer < HttpConsumer
         url: item.url,
         updated_at: item.published || item.updated,
         content: item.content || item.summary,
+        media_url: item.media_url,
         feed: self
       )
     end
@@ -78,8 +115,7 @@ class SmbcConsumer < AtomConsumer
     super({ url: 'https://www.smbc-comics.com/rss.php' }.merge(options))
   end
 
-  def do_fetch
-    super()
+  def do_transform
     items.each do |item|
       item.content.gsub!(%r{<br><br><a href="[^">]*">Click here to go see the bonus panel!</a>}i, '')
       item.content.gsub!(/<br><br><a href=[^>]*>New comic.*/i, '')
@@ -87,7 +123,38 @@ class SmbcConsumer < AtomConsumer
   end
 end
 
+class YoutubeConsumer < AtomConsumer
+  def initialize(options = {})
+    raise "only specify one of :channel_id and :user" if options[:channel_id] && options[:user]
+    url =
+      if options[:channel_id]
+        "https://www.youtube.com/feeds/videos.xml?channel_id=#{options[:channel_id]}"
+      elsif options[:user]
+        "https://www.youtube.com/feeds/videos.xml?user=#{options[:user]}"
+      else
+        raise "must specify either :channel_id or :user"
+      end
+    super({ url: url }.merge(options))
+  end
+
+  def do_transform
+    items.each do |item|
+      item.content = <<~HTML
+        <iframe id="ytplayer" type="text/html" width="800" height="480"
+         src="#{item.media_url.gsub('/v/', '/embed/')}"
+         frameborder="0"></iframe>
+        (<a href="http://#{item.url}">direct link</a>)
+      HTML
+    end
+  end
+end
+
 feeds = [
+  YoutubeConsumer.new(channel_id: 'UCPD_bxCRGpmmeQcbe2kpPaA', only: 'Hot Ones'),
+  YoutubeConsumer.new(user: 'bgfilms', except: 'Basics with Babish'),
+  YoutubeConsumer.new(channel_id: 'UCfMJ2MchTSW2kWaT0kK94Yw'),
+  YoutubeConsumer.new(user: 'voxdotcom'),
+  YoutubeConsumer.new(user: 'day9tv', only: 'Starcraft'),
   XkcdConsumer.new,
   SmbcConsumer.new,
 ]
